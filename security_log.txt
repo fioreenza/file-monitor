@@ -1,0 +1,9 @@
+[2025-11-05 23:52:21] INFO: Initialized hash database with current files.
+[2025-11-05 23:52:34] INFO: File "data.txt" verified OK.
+[2025-11-05 23:52:34] INFO: File "data2.txt" verified OK.
+[2025-11-05 23:53:00] INFO: File "data.txt" verified OK.
+[2025-11-05 23:53:00] INFO: File "data2.txt" verified OK.
+[2025-11-05 23:53:00] ALERT: Unknown file "hack.txt" detected.
+[2025-11-05 23:53:09] INFO: File "data.txt" verified OK.
+[2025-11-05 23:53:09] WARNING: File "data2.txt" integrity failed!
+[2025-11-05 23:53:09] ALERT: Unknown file "hack.txt" detected.
