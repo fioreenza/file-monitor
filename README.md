@@ -33,8 +33,8 @@ Menggunakan hash SHA-256 untuk memverifikasi integritas file. Semua aktivitas di
 
 1. Clone repo:
 ```bash
-git clone <repo-url>
-cd <repo-folder>
+git clone https://github.com/fioreenza/file-monitor.git
+cd file-monitor
 ```
 
 2. Install dependencies:
