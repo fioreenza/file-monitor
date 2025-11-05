@@ -11,8 +11,6 @@ Project ini memantau folder `./secure_files/` untuk mendeteksi file yang:
 
 Menggunakan hash SHA-256 untuk memverifikasi integritas file. Semua aktivitas dicatat di `security_log.txt`.
 
----
-
 ## Fitur
 
 1. Monitoring file
@@ -55,9 +53,8 @@ node server.js
 - Jumlah file rusak
 - Waktu terakhir anomali
 
----
 
-Tech stack
+## Tech stack
 - Node.js
 - Express.js
 - HTML + JS (mini web interface)
