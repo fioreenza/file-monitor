@@ -1,9 +1,5 @@
 # File Integrity Monitor
 
-| Nama                      | NRP           |
-|---------------------------|---------------|
-| Fiorenza Adelia Nalle     | 5027231053    |
-
 Project ini memantau folder `./secure_files/` untuk mendeteksi file yang:
 
 - Diubah
