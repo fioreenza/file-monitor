@@ -1,0 +1,140 @@
+@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
+
+:root {
+  --background-color: #1a1a1a;
+  --primary-text: #e0e0e0;
+  --card-background: #252525;
+  --border-color: #333;
+  --shadow-color: rgba(0, 0, 0, 0.5);
+  --safe-color: #2ecc71;
+  --failed-color: #e74c3c;
+  --anomaly-glow: #e74c3c;
+  --font-family: 'Roboto Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-family);
+  background-color: var(--background-color);
+  color: var(--primary-text);
+  padding: 2rem;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+header h1 {
+  font-size: 2.5rem;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--failed-color);
+  text-shadow: 0 0 10px var(--failed-color);
+}
+
+.dashboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.card {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 15px var(--shadow-color);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px var(--shadow-color);
+}
+
+.card h3 {
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  font-weight: 400;
+  text-transform: uppercase;
+  color: var(--primary-text);
+}
+
+.card .stat {
+  font-size: 2.5rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+#safeCount { color: var(--safe-color); }
+#failedCount { color: var(--failed-color); }
+#lastAnomaly {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--primary-text);
+}
+
+.logs-container {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 15px var(--shadow-color);
+}
+
+.logs-container h2 {
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+#logContent {
+  background-color: #111;
+  border-radius: 4px;
+  padding: 1rem;
+  height: 400px;
+  overflow-y: scroll;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--card-background);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--failed-color);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c0392b;
+}
+
+.flash {
+  animation: flash-animation 0.7s ease-out;
+}
+
+@keyframes flash-animation {
+  0% {
+    box-shadow: 0 0 20px var(--anomaly-glow);
+  }
+  100% {
+    box-shadow: 0 4px 15px var(--shadow-color);
+  }
+}

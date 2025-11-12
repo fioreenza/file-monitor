@@ -1,26 +1,40 @@
 <!DOCTYPE html>
 <html lang="id">
-<head>
-  <meta charset="UTF-8" />
-  <title>File Integrity Monitor</title>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
-</head>
-<body>
-  <h1>File Integrity Monitor</h1>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FIM Dashboard | Live Monitor</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>File Integrity Monitor</h1>
+      </header>
 
-  <section id="summary">
-    <h3>Ringkasan</h3>
-    <p><b>File Aman:</b> <span id="safeCount">0</span></p>
-    <p><b>File Rusak:</b> <span id="failedCount">0</span></p>
-    <p><b>Anomali Terakhir:</b> <span id="lastAnomaly">-</span></p>
-    <button id="scanBtn">Jalankan Scan</button>
-  </section>
+      <main>
+        <section class="dashboard">
+          <div class="card" id="safe-card">
+            <h3>File Aman</h3>
+            <p class="stat"><span id="safeCount">0</span></p>
+          </div>
+          <div class="card" id="failed-card">
+            <h3>File Rusak / Berubah</h3>
+            <p class="stat"><span id="failedCount">0</span></p>
+          </div>
+          <div class="card" id="anomaly-card">
+            <h3>Anomali Terakhir</h3>
+            <p class="stat" id="lastAnomaly">-</p>
+          </div>
+        </section>
 
-  <section id="logs">
-    <h3>Log Aktivitas</h3>
-    <pre id="logContent">Memuat log...</pre>
-  </section>
+        <section class="logs-container" id="logs-section">
+          <h2>Terminal Log Aktivitas</h2>
+          <pre id="logContent">Menunggu data dari server...</pre>
+        </section>
+      </main>
+    </div>
 
-  <script src="script.js"></script>
-</body>
+    <script src="script.js"></script>
+  </body>
 </html>

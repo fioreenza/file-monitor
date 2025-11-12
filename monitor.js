@@ -7,67 +7,95 @@ const HASH_DB = "./hash_db.json";
 const LOG_FILE = "./security_log.txt";
 
 function getFileHash(filePath) {
-  const fileBuffer = fs.readFileSync(filePath);
-  const hashSum = crypto.createHash("sha256");
-  hashSum.update(fileBuffer);
-  return hashSum.digest("hex");
+  try {
+    const fileBuffer = fs.readFileSync(filePath);
+    const hashSum = crypto.createHash("sha256");
+    hashSum.update(fileBuffer);
+    return hashSum.digest("hex");
+  } catch (error) {
+    logEvent(
+      "ERROR",
+      `Could not read file "${path.basename(
+        filePath
+      )}". It might be in use or deleted.`
+    );
+    return null;
+  }
 }
 
 function logEvent(level, message) {
-  const timestamp = new Date().toLocaleString("sv-SE", {
-    timeZone: "Asia/Jakarta",
-  }).replace("T", " ").split(".")[0];
+  const timestamp = new Date()
+    .toLocaleString("sv-SE", {
+      timeZone: "Asia/Jakarta",
+    })
+    .replace("T", " ")
+    .split(".")[0];
   const logMessage = `[${timestamp}] ${level}: ${message}\n`;
   fs.appendFileSync(LOG_FILE, logMessage);
   console.log(logMessage.trim());
 }
 
 let hashDB = {};
+let liveState = {};
+
 if (fs.existsSync(HASH_DB)) {
   hashDB = JSON.parse(fs.readFileSync(HASH_DB, "utf-8"));
-  logEvent("INFO", "Loaded existing hash database.");
+  logEvent("INFO", "Loaded security baseline from hash_db.json.");
 } else {
-  const currentFiles = fs.existsSync(MONITOR_DIR) ? fs.readdirSync(MONITOR_DIR) : [];
-  currentFiles.forEach(file => {
+  const currentFiles = fs.existsSync(MONITOR_DIR)
+    ? fs.readdirSync(MONITOR_DIR)
+    : [];
+  currentFiles.forEach((file) => {
     const filePath = path.join(MONITOR_DIR, file);
     if (fs.lstatSync(filePath).isFile()) {
       hashDB[file] = getFileHash(filePath);
     }
   });
   fs.writeFileSync(HASH_DB, JSON.stringify(hashDB, null, 2));
-  logEvent("INFO", "Initialized hash database with current files.");
+  logEvent("INFO", "Initialized new security baseline in hash_db.json.");
 }
 
-function scanFiles() {
+liveState = JSON.parse(JSON.stringify(hashDB));
+
+function checkForChanges() {
   if (!fs.existsSync(MONITOR_DIR)) {
     logEvent("ERROR", `Monitored directory ${MONITOR_DIR} does not exist.`);
-    return;
+    return false;
   }
 
+  let changesDetected = false;
   const currentFiles = fs.readdirSync(MONITOR_DIR);
   const currentHashes = {};
 
-  currentFiles.forEach(file => {
+  currentFiles.forEach((file) => {
     const filePath = path.join(MONITOR_DIR, file);
-    if (fs.lstatSync(filePath).isDirectory()) return;
-    currentHashes[file] = getFileHash(filePath);
-  });
-
-  currentFiles.forEach(file => {
-    if (!hashDB[file]) {
-      logEvent("ALERT", `Unknown file "${file}" detected.`);
-    } else if (hashDB[file] !== currentHashes[file]) {
-      logEvent("WARNING", `File "${file}" integrity failed!`);
-    } else {
-      logEvent("INFO", `File "${file}" verified OK.`);
+    if (fs.lstatSync(filePath).isFile()) {
+      const hash = getFileHash(filePath);
+      if (hash) currentHashes[file] = hash;
     }
   });
 
-  for (const file in hashDB) {
-    if (!currentHashes[file]) {
-      logEvent("ALERT", `File "${file}" has been deleted!`);
+  for (const file in currentHashes) {
+    if (!liveState[file]) {
+      logEvent("ALERT", `New file detected: "${file}".`);
+      liveState[file] = currentHashes[file];
+      changesDetected = true;
+    } else if (liveState[file] !== currentHashes[file]) {
+      logEvent("WARNING", `File modified: "${file}". Integrity failed.`);
+      liveState[file] = currentHashes[file];
+      changesDetected = true;
     }
   }
+
+  for (const file in liveState) {
+    if (!currentHashes[file]) {
+      logEvent("ALERT", `File deleted: "${file}".`);
+      delete liveState[file];
+      changesDetected = true;
+    }
+  }
+
+  return changesDetected;
 }
 
 function analyzeLogs() {
@@ -75,23 +103,31 @@ function analyzeLogs() {
     return { safeCount: 0, failedCount: 0, lastAnomaly: "Belum ada log." };
 
   const lines = fs.readFileSync(LOG_FILE, "utf-8").split("\n").filter(Boolean);
-  const status = {};
+  let safeCount = Object.keys(hashDB).length;
+  let failedCount = 0;
 
-  for (const l of lines) {
-    const name = l.match(/\(([^)]+)\)/)?.[1] || l.match(/"([^"]+)"/)?.[1];
-    if (!name) continue;
-    if (/verified OK/i.test(l)) status[name] = "safe";
-    else if (/failed/i.test(l)) status[name] = "failed";
-    else if (/ALERT/i.test(l)) status[name] = "alert";
-  }
+  const fileStatus = {};
 
-  const vals = Object.values(status);
+  lines.forEach((line) => {
+    const fileMatch = line.match(/"(.*?)"/);
+    if (!fileMatch) return;
+    const file = fileMatch[1];
+
+    if (line.includes("WARNING") || line.includes("ALERT")) {
+      fileStatus[file] = "failed";
+    }
+  });
+
+  failedCount = Object.keys(fileStatus).length;
+  safeCount = Math.max(0, Object.keys(hashDB).length - failedCount);
+
   return {
-    safeCount: vals.filter((v) => v === "safe").length,
-    failedCount: vals.filter((v) => v === "failed").length,
+    safeCount: safeCount,
+    failedCount: failedCount,
     lastAnomaly:
-      lines.findLast((l) => l.includes("ALERT"))?.match(/\[(.*?)\]/)?.[1] ||
-      "Tidak ada anomali.",
+      lines
+        .findLast((l) => l.includes("ALERT") || l.includes("WARNING"))
+        ?.match(/\[(.*?)\]/)?.[1] || "Tidak ada anomali.",
   };
 }
 
@@ -100,4 +136,4 @@ function readLogs() {
   return fs.readFileSync(LOG_FILE, "utf-8").split("\n").filter(Boolean);
 }
 
-module.exports = { scanFiles, analyzeLogs, readLogs };
+module.exports = { checkForChanges, analyzeLogs, readLogs };

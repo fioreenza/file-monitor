@@ -1,18 +1,32 @@
 const express = require("express");
 const cors = require("cors");
-const { scanFiles, analyzeLogs, readLogs } = require("./monitor");
+const { checkForChanges, analyzeLogs, readLogs } = require("./monitor");
 
 const app = express();
 const PORT = 3000;
+
+let clients = [];
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
+app.get("/api/events", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders();
 
-app.post("/api/scan", (req, res) => {
-  scanFiles();
-  res.json({ message: "Pemindaian selesai." });
+  const clientId = Date.now();
+  clients.push({ id: clientId, res });
+  console.log(`Client ${clientId} connected`);
+
+  sendUpdate();
+
+  req.on("close", () => {
+    clients = clients.filter((client) => client.id !== clientId);
+    console.log(`Client ${clientId} disconnected`);
+  });
 });
 
 app.get("/api/summary", (req, res) => {
@@ -25,4 +39,26 @@ app.get("/api/logs", (req, res) => {
   res.json(logs);
 });
 
-app.listen(PORT, () => console.log(`Server running on http://localhost:${PORT}`));
+function sendUpdate() {
+  const summary = analyzeLogs();
+  const logs = readLogs();
+  const data = { summary, logs };
+
+  for (const client of clients) {
+    client.res.write(`data: ${JSON.stringify(data)}\n\n`);
+  }
+}
+
+setInterval(() => {
+  console.log("Checking for file changes...");
+  const hasChanged = checkForChanges();
+
+  if (hasChanged) {
+    console.log("Changes detected! Sending update to clients.");
+    sendUpdate();
+  }
+}, 3000);
+
+app.listen(PORT, () =>
+  console.log(`Server running on http://localhost:${PORT}`)
+);
