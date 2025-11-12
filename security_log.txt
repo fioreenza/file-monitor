@@ -1,2 +1,17 @@
 [2025-11-13 00:32:01] INFO: Initialized new security baseline in hash_db.json.
 [2025-11-13 00:32:16] WARNING: File modified: "hack.txt". Integrity failed.
+[2025-11-13 00:57:30] INFO: Loaded security baseline from hash_db.json.
+[2025-11-13 00:57:30] INFO: Real-time monitoring started on: /Users/harwindaharis/Documents/Kuliah/Semester5/KWA/file-monitor/secure_files
+[2025-11-13 00:57:47] INFO: Directory added: "test".
+[2025-11-13 00:57:52] ALERT: New file detected: "test/test.txt".
+[2025-11-13 00:58:41] INFO: Loaded security baseline from hash_db.json.
+[2025-11-13 00:58:41] INFO: Real-time monitoring started on: /Users/harwindaharis/Documents/Kuliah/Semester5/KWA/file-monitor/secure_files
+[2025-11-13 01:01:08] INFO: Directory added: "test/test1".
+[2025-11-13 01:01:13] ALERT: New file detected: "test/test1/testing.txt".
+[2025-11-13 01:01:19] WARNING: File modified: "test/test1/testing.txt". Integrity failed.
+[2025-11-13 01:02:25] WARNING: File modified: "data.txt". Integrity failed.
+[2025-11-13 01:02:44] WARNING: File modified: "data.txt". Integrity failed.
+[2025-11-13 01:03:46] INFO: Loaded security baseline from hash_db.json.
+[2025-11-13 01:03:46] INFO: Real-time monitoring started on: /Users/harwindaharis/Documents/Kuliah/Semester5/KWA/file-monitor/secure_files
+[2025-11-13 01:12:33] INFO: Loaded security baseline from hash_db.json.
+[2025-11-13 01:12:33] INFO: Real-time monitoring started on: /Users/harwindaharis/Documents/Kuliah/Semester5/KWA/file-monitor/secure_files

@@ -1,9 +1,9 @@
 const express = require("express");
 const cors = require("cors");
-const { checkForChanges, analyzeLogs, readLogs } = require("./monitor");
+const { startMonitoring, analyzeLogs, readLogs } = require("./monitor");
 
 const app = express();
-const PORT = 3000;
+const PORT = 4000;
 
 let clients = [];
 
@@ -49,15 +49,7 @@ function sendUpdate() {
   }
 }
 
-setInterval(() => {
-  console.log("Checking for file changes...");
-  const hasChanged = checkForChanges();
-
-  if (hasChanged) {
-    console.log("Changes detected! Sending update to clients.");
-    sendUpdate();
-  }
-}, 3000);
+startMonitoring(sendUpdate);
 
 app.listen(PORT, () =>
   console.log(`Server running on http://localhost:${PORT}`)

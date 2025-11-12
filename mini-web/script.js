@@ -40,9 +40,9 @@ function updateUI(summary, logs) {
 
 async function loadInitialData() {
   try {
-    const summaryRes = await fetch("http://localhost:3000/api/summary");
+    const summaryRes = await fetch("http://localhost:4000/api/summary");
     const summary = await summaryRes.json();
-    const logsRes = await fetch("http://localhost:3000/api/logs");
+    const logsRes = await fetch("http://localhost:4000/api/logs");
     const logs = await logsRes.json();
     updateUI(summary, logs);
   } catch (error) {
@@ -52,7 +52,7 @@ async function loadInitialData() {
 }
 
 function startLiveUpdates() {
-  const eventSource = new EventSource("http://localhost:3000/api/events");
+  const eventSource = new EventSource("http://localhost:4000/api/events");
 
   eventSource.onmessage = function (event) {
     console.log("Menerima pembaruan dari server...");

@@ -1,10 +1,11 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const chokidar = require("chokidar");
 
-const MONITOR_DIR = "./secure_files";
-const HASH_DB = "./hash_db.json";
-const LOG_FILE = "./security_log.txt";
+const MONITOR_DIR = path.resolve("./secure_files");
+const HASH_DB = path.resolve("./hash_db.json");
+const LOG_FILE = path.resolve("./security_log.txt");
 
 function getFileHash(filePath) {
   try {
@@ -15,9 +16,10 @@ function getFileHash(filePath) {
   } catch (error) {
     logEvent(
       "ERROR",
-      `Could not read file "${path.basename(
+      `Could not read file "${path.relative(
+        MONITOR_DIR,
         filePath
-      )}". It might be in use or deleted.`
+      )}". It may have been deleted.`
     );
     return null;
   }
@@ -35,67 +37,102 @@ function logEvent(level, message) {
   console.log(logMessage.trim());
 }
 
+
+function getAllFiles(dirPath, arrayOfFiles = []) {
+  const files = fs.readdirSync(dirPath);
+
+  files.forEach((file) => {
+    const fullPath = path.join(dirPath, file);
+    if (fs.statSync(fullPath).isDirectory()) {
+      getAllFiles(fullPath, arrayOfFiles);
+    } else {
+      arrayOfFiles.push(fullPath);
+    }
+  });
+
+  return arrayOfFiles;
+}
+
 let hashDB = {};
 let liveState = {};
 
-if (fs.existsSync(HASH_DB)) {
-  hashDB = JSON.parse(fs.readFileSync(HASH_DB, "utf-8"));
-  logEvent("INFO", "Loaded security baseline from hash_db.json.");
-} else {
-  const currentFiles = fs.existsSync(MONITOR_DIR)
-    ? fs.readdirSync(MONITOR_DIR)
-    : [];
-  currentFiles.forEach((file) => {
-    const filePath = path.join(MONITOR_DIR, file);
-    if (fs.lstatSync(filePath).isFile()) {
-      hashDB[file] = getFileHash(filePath);
+function initializeBaseline() {
+  if (fs.existsSync(HASH_DB)) {
+    hashDB = JSON.parse(fs.readFileSync(HASH_DB, "utf-8"));
+    logEvent("INFO", "Loaded security baseline from hash_db.json.");
+  } else {
+    logEvent("INFO", "No baseline found. Creating new security baseline...");
+    if (!fs.existsSync(MONITOR_DIR)) {
+      fs.mkdirSync(MONITOR_DIR, { recursive: true });
     }
-  });
-  fs.writeFileSync(HASH_DB, JSON.stringify(hashDB, null, 2));
-  logEvent("INFO", "Initialized new security baseline in hash_db.json.");
+    const allFiles = getAllFiles(MONITOR_DIR);
+    allFiles.forEach((filePath) => {
+      const relativePath = path.relative(MONITOR_DIR, filePath);
+      hashDB[relativePath] = getFileHash(filePath);
+    });
+    fs.writeFileSync(HASH_DB, JSON.stringify(hashDB, null, 2));
+    logEvent("INFO", "Initialized new security baseline in hash_db.json.");
+  }
+  liveState = JSON.parse(JSON.stringify(hashDB));
 }
 
-liveState = JSON.parse(JSON.stringify(hashDB));
+function startMonitoring(onChangeCallback) {
+  initializeBaseline();
 
-function checkForChanges() {
-  if (!fs.existsSync(MONITOR_DIR)) {
-    logEvent("ERROR", `Monitored directory ${MONITOR_DIR} does not exist.`);
-    return false;
-  }
-
-  let changesDetected = false;
-  const currentFiles = fs.readdirSync(MONITOR_DIR);
-  const currentHashes = {};
-
-  currentFiles.forEach((file) => {
-    const filePath = path.join(MONITOR_DIR, file);
-    if (fs.lstatSync(filePath).isFile()) {
-      const hash = getFileHash(filePath);
-      if (hash) currentHashes[file] = hash;
-    }
+  const watcher = chokidar.watch(MONITOR_DIR, {
+    persistent: true,
+    ignoreInitial: true,
+    ignored: /(^|[\/\\])\../,
   });
 
-  for (const file in currentHashes) {
-    if (!liveState[file]) {
-      logEvent("ALERT", `New file detected: "${file}".`);
-      liveState[file] = currentHashes[file];
-      changesDetected = true;
-    } else if (liveState[file] !== currentHashes[file]) {
-      logEvent("WARNING", `File modified: "${file}". Integrity failed.`);
-      liveState[file] = currentHashes[file];
-      changesDetected = true;
-    }
-  }
+  logEvent("INFO", `Real-time monitoring started on: ${MONITOR_DIR}`);
 
-  for (const file in liveState) {
-    if (!currentHashes[file]) {
-      logEvent("ALERT", `File deleted: "${file}".`);
-      delete liveState[file];
-      changesDetected = true;
-    }
-  }
-
-  return changesDetected;
+  watcher
+    .on("add", (filePath) => {
+      const relativePath = path.relative(MONITOR_DIR, filePath);
+      logEvent("ALERT", `New file detected: "${relativePath}".`);
+      const hash = getFileHash(filePath);
+      if (hash) {
+        liveState[relativePath] = hash;
+      }
+      onChangeCallback();
+    })
+    .on("change", (filePath) => {
+      const relativePath = path.relative(MONITOR_DIR, filePath);
+      const newHash = getFileHash(filePath);
+      if (newHash && liveState[relativePath] !== newHash) {
+        logEvent("WARNING", `File modified: "${relativePath}". Integrity failed.`);
+        liveState[relativePath] = newHash;
+        onChangeCallback();
+      } else if (!newHash) {
+        delete liveState[relativePath];
+        onChangeCallback();
+      }
+    })
+    .on("unlink", (filePath) => {
+      const relativePath = path.relative(MONITOR_DIR, filePath);
+      if (liveState[relativePath]) {
+        logEvent("ALERT", `File deleted: "${relativePath}".`);
+        delete liveState[relativePath];
+        onChangeCallback();
+      }
+    })
+    .on("addDir", (dirPath) => {
+      const relativePath = path.relative(MONITOR_DIR, dirPath);
+      logEvent("INFO", `Directory added: "${relativePath}".`);
+      onChangeCallback();
+    })
+    .on("unlinkDir", (dirPath) => {
+      const relativePath = path.relative(MONITOR_DIR, dirPath);
+      logEvent("ALERT", `Directory deleted: "${relativePath}".`);
+      Object.keys(liveState).forEach((file) => {
+        if (file.startsWith(relativePath + path.sep)) {
+          delete liveState[file];
+        }
+      });
+      onChangeCallback();
+    })
+    .on("error", (error) => logEvent("ERROR", `Watcher error: ${error}`));
 }
 
 function analyzeLogs() {
@@ -136,4 +173,4 @@ function readLogs() {
   return fs.readFileSync(LOG_FILE, "utf-8").split("\n").filter(Boolean);
 }
 
-module.exports = { checkForChanges, analyzeLogs, readLogs };
+module.exports = { startMonitoring, analyzeLogs, readLogs };
