@@ -1,11 +1,34 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const multer = require("multer");
 const chokidar = require("chokidar");
 
 const MONITOR_DIR = path.resolve("./secure_files");
 const HASH_DB = path.resolve("./hash_db.json");
 const LOG_FILE = path.resolve("./security_log.txt");
+const PASSWORD = "admin123";
+const UPLOAD_DIR = MONITOR_DIR;
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, UPLOAD_DIR);
+  },
+  filename: (req, file, cb) => {
+    cb(null, file.originalname);
+  },
+});
+const upload = multer({ storage });
+
+function logEvent(level, message) {
+  const timestamp = new Date()
+    .toLocaleString("sv-SE", { timeZone: "Asia/Jakarta" })
+    .replace("T", " ")
+    .split(".")[0];
+  const logMessage = `[${timestamp}] ${level}: ${message}\n`;
+  fs.appendFileSync(LOG_FILE, logMessage);
+  console.log(logMessage.trim());
+}
 
 function getFileHash(filePath) {
   try {
@@ -14,33 +37,14 @@ function getFileHash(filePath) {
     hashSum.update(fileBuffer);
     return hashSum.digest("hex");
   } catch (error) {
-    logEvent(
-      "ERROR",
-      `Could not read file "${path.relative(
-        MONITOR_DIR,
-        filePath
-      )}". It may have been deleted.`
-    );
+    logEvent("ERROR", `Could not read file "${path.relative(MONITOR_DIR, filePath)}".`);
     return null;
   }
 }
 
-function logEvent(level, message) {
-  const timestamp = new Date()
-    .toLocaleString("sv-SE", {
-      timeZone: "Asia/Jakarta",
-    })
-    .replace("T", " ")
-    .split(".")[0];
-  const logMessage = `[${timestamp}] ${level}: ${message}\n`;
-  fs.appendFileSync(LOG_FILE, logMessage);
-  console.log(logMessage.trim());
-}
-
-
 function getAllFiles(dirPath, arrayOfFiles = []) {
+  if (!fs.existsSync(dirPath)) return arrayOfFiles;
   const files = fs.readdirSync(dirPath);
-
   files.forEach((file) => {
     const fullPath = path.join(dirPath, file);
     if (fs.statSync(fullPath).isDirectory()) {
@@ -49,7 +53,6 @@ function getAllFiles(dirPath, arrayOfFiles = []) {
       arrayOfFiles.push(fullPath);
     }
   });
-
   return arrayOfFiles;
 }
 
@@ -58,8 +61,13 @@ let liveState = {};
 
 function initializeBaseline() {
   if (fs.existsSync(HASH_DB)) {
-    hashDB = JSON.parse(fs.readFileSync(HASH_DB, "utf-8"));
-    logEvent("INFO", "Loaded security baseline from hash_db.json.");
+    try {
+      hashDB = JSON.parse(fs.readFileSync(HASH_DB, "utf-8"));
+      logEvent("INFO", "Loaded security baseline from hash_db.json.");
+    } catch (e) {
+      logEvent("ERROR", "Failed to parse hash_db.json. Reinitializing baseline.");
+      hashDB = {};
+    }
   } else {
     logEvent("INFO", "No baseline found. Creating new security baseline...");
     if (!fs.existsSync(MONITOR_DIR)) {
@@ -76,12 +84,44 @@ function initializeBaseline() {
   liveState = JSON.parse(JSON.stringify(hashDB));
 }
 
+function handleFileUpload(req, res, sendUpdate) {
+  const userPassword = req.body.password;
+  const file = req.file;
+
+  if (!file) {
+    return res.status(400).json({ message: "Tidak ada file yang diupload." });
+  }
+
+  if (userPassword !== PASSWORD) {
+    logEvent("ALERT", `File "${file.originalname}" uploaded with incorrect password (anomaly).`);
+    sendUpdate();
+    return res.status(403).json({
+      message: "Password salah! File disimpan tapi ditandai anomali (ALERT).",
+    });
+  }
+
+  const relativePath = path.relative(MONITOR_DIR, file.path);
+  const hash = getFileHash(file.path);
+  if (hash) {
+    hashDB[relativePath] = hash;
+    fs.writeFileSync(HASH_DB, JSON.stringify(hashDB, null, 2));
+    logEvent("INFO", `File "${file.originalname}" verified OK.`);
+    liveState[relativePath] = hash;
+    sendUpdate();
+    return res.json({ message: "File berhasil diupload dan diverifikasi OK." });
+  } else {
+    logEvent("ERROR", `Unknown problem reading uploaded file "${file.originalname}".`);
+    sendUpdate();
+    return res.status(500).json({ message: "Gagal memproses file yang diupload." });
+  }
+}
+
 function startMonitoring(onChangeCallback) {
   initializeBaseline();
 
   const watcher = chokidar.watch(MONITOR_DIR, {
     persistent: true,
-    ignoreInitial: true,
+    ignoreInitial: false,
     ignored: /(^|[\/\\])\../,
   });
 
@@ -90,81 +130,80 @@ function startMonitoring(onChangeCallback) {
   watcher
     .on("add", (filePath) => {
       const relativePath = path.relative(MONITOR_DIR, filePath);
-      logEvent("ALERT", `New file detected: "${relativePath}".`);
       const hash = getFileHash(filePath);
-      if (hash) {
-        liveState[relativePath] = hash;
+
+      if (!hashDB[relativePath]) {
+        logEvent("ALERT", `Unknown file "${relativePath}" detected.`);
+      } else if (hash === hashDB[relativePath]) {
+        logEvent("INFO", `File "${relativePath}" verified OK.`);
+      } else {
+        logEvent("WARNING", `File "${relativePath}" integrity failed!`);
       }
+
+      liveState[relativePath] = hash;
       onChangeCallback();
     })
     .on("change", (filePath) => {
       const relativePath = path.relative(MONITOR_DIR, filePath);
       const newHash = getFileHash(filePath);
-      if (newHash && liveState[relativePath] !== newHash) {
-        logEvent("WARNING", `File modified: "${relativePath}". Integrity failed.`);
-        liveState[relativePath] = newHash;
-        onChangeCallback();
-      } else if (!newHash) {
-        delete liveState[relativePath];
-        onChangeCallback();
+
+      if (!hashDB[relativePath]) {
+        logEvent("ALERT", `Unknown file "${relativePath}" detected.`);
+      } else if (hashDB[relativePath] !== newHash) {
+        logEvent("WARNING", `File "${relativePath}" integrity failed!`);
+      } else {
+        logEvent("INFO", `File "${relativePath}" verified OK.`);
       }
+
+      liveState[relativePath] = newHash;
+      onChangeCallback();
     })
     .on("unlink", (filePath) => {
       const relativePath = path.relative(MONITOR_DIR, filePath);
-      if (liveState[relativePath]) {
-        logEvent("ALERT", `File deleted: "${relativePath}".`);
-        delete liveState[relativePath];
-        onChangeCallback();
-      }
-    })
-    .on("addDir", (dirPath) => {
-      const relativePath = path.relative(MONITOR_DIR, dirPath);
-      logEvent("INFO", `Directory added: "${relativePath}".`);
+      logEvent("ALERT", `File "${relativePath}" deleted.`);
+      delete liveState[relativePath];
       onChangeCallback();
     })
-    .on("unlinkDir", (dirPath) => {
-      const relativePath = path.relative(MONITOR_DIR, dirPath);
-      logEvent("ALERT", `Directory deleted: "${relativePath}".`);
-      Object.keys(liveState).forEach((file) => {
-        if (file.startsWith(relativePath + path.sep)) {
-          delete liveState[file];
-        }
-      });
-      onChangeCallback();
-    })
-    .on("error", (error) => logEvent("ERROR", `Watcher error: ${error}`));
+    .on("error", (error) => {
+      logEvent("ERROR", `Watcher error: ${error}`);
+    });
 }
 
 function analyzeLogs() {
   if (!fs.existsSync(LOG_FILE))
-    return { safeCount: 0, failedCount: 0, lastAnomaly: "Belum ada log." };
+    return { safeCount: 0, failedCount: 0, anomalyCount: 0, lastAnomaly: "Belum ada log." };
 
   const lines = fs.readFileSync(LOG_FILE, "utf-8").split("\n").filter(Boolean);
-  let safeCount = Object.keys(hashDB).length;
-  let failedCount = 0;
 
-  const fileStatus = {};
+  const failedSet = new Set();   
+  const anomalySet = new Set();  
 
   lines.forEach((line) => {
-    const fileMatch = line.match(/"(.*?)"/);
-    if (!fileMatch) return;
-    const file = fileMatch[1];
+    const match = line.match(/"(.*?)"/);
+    if (!match) return;
+    const file = match[1];
 
-    if (line.includes("WARNING") || line.includes("ALERT")) {
-      fileStatus[file] = "failed";
+    if (line.includes("WARNING")) {
+      failedSet.add(file);
+    } else if (line.includes("ALERT")) {
+      anomalySet.add(file); 
     }
   });
 
-  failedCount = Object.keys(fileStatus).length;
-  safeCount = Math.max(0, Object.keys(hashDB).length - failedCount);
+  const failedCount = failedSet.size; 
+  const anomalyCount = anomalySet.size; 
+  const safeCount = Math.max(0, Object.keys(hashDB).length - failedCount);
+
+  const lastAnomLine =
+    lines.findLast((l) => l.includes("ALERT") || l.includes("WARNING")) || null;
+  const lastAnomaly =
+    lastAnomLine?.match(/\[(.*?)\]/)?.[1] || "Tidak ada anomali.";
 
   return {
-    safeCount: safeCount,
-    failedCount: failedCount,
-    lastAnomaly:
-      lines
-        .findLast((l) => l.includes("ALERT") || l.includes("WARNING"))
-        ?.match(/\[(.*?)\]/)?.[1] || "Tidak ada anomali.",
+    safeCount,
+    failedCount,
+    anomalyCount,
+    lastAnomaly,
   };
 }
 
@@ -173,4 +212,10 @@ function readLogs() {
   return fs.readFileSync(LOG_FILE, "utf-8").split("\n").filter(Boolean);
 }
 
-module.exports = { startMonitoring, analyzeLogs, readLogs };
+module.exports = {
+  startMonitoring,
+  analyzeLogs,
+  readLogs,
+  handleFileUpload,
+  upload,
+};

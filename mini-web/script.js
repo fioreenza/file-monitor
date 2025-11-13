@@ -67,5 +67,42 @@ function startLiveUpdates() {
   };
 }
 
+document.getElementById("uploadForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const fileInput = document.getElementById("fileInput");
+  const passwordInput = document.getElementById("passwordInput");
+  const statusEl = document.getElementById("uploadStatus");
+
+  if (!fileInput.files.length) {
+    statusEl.textContent = "Pilih file terlebih dahulu.";
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+  formData.append("password", passwordInput.value);
+
+  statusEl.textContent = "Mengunggah file...";
+
+  try {
+    const res = await fetch("http://localhost:4000/api/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    const result = await res.json();
+    statusEl.textContent = result.message;
+
+    if (res.ok) {
+      flashElement("safe-card");
+    } else {
+      flashElement("failed-card");
+    }
+  } catch (err) {
+    statusEl.textContent = "Gagal mengunggah file ke server.";
+  }
+});
+
 loadInitialData();
 startLiveUpdates();

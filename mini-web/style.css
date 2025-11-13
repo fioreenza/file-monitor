@@ -138,3 +138,49 @@ header h1 {
     box-shadow: 0 4px 15px var(--shadow-color);
   }
 }
+
+.upload-section {
+  background-color: var(--card-background);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 15px var(--shadow-color);
+  margin-bottom: 2rem;
+}
+
+.upload-section h2 {
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+#uploadForm {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+#uploadForm input,
+#uploadForm button {
+  padding: 0.8rem;
+  font-family: var(--font-family);
+  font-size: 1rem;
+  border-radius: 5px;
+  border: 1px solid var(--border-color);
+}
+
+#uploadForm button {
+  background-color: var(--failed-color);
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+#uploadForm button:hover {
+  background-color: #c0392b;
+}
+
+#uploadStatus {
+  margin-top: 1rem;
+  font-size: 0.95rem;
+}

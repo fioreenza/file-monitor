@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { startMonitoring, analyzeLogs, readLogs } = require("./monitor");
+const { startMonitoring, analyzeLogs, readLogs, upload, handleFileUpload } = require("./monitor");
 
 const app = express();
 const PORT = 4000;
@@ -38,6 +38,11 @@ app.get("/api/logs", (req, res) => {
   const logs = readLogs();
   res.json(logs);
 });
+
+app.post("/api/upload", upload.single("file"), (req, res) => {
+  handleFileUpload(req, res, sendUpdate);
+});
+
 
 function sendUpdate() {
   const summary = analyzeLogs();

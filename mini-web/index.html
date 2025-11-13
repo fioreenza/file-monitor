@@ -28,6 +28,16 @@
           </div>
         </section>
 
+        <section class="upload-section">
+          <h2>Upload File Baru</h2>
+          <form id="uploadForm">
+            <input type="file" id="fileInput" name="file" required />
+            <input type="password" id="passwordInput" name="password" placeholder="Masukkan password" required />
+            <button type="submit">Upload File</button>
+          </form>
+          <p id="uploadStatus"></p>
+        </section>
+
         <section class="logs-container" id="logs-section">
           <h2>Terminal Log Aktivitas</h2>
           <pre id="logContent">Menunggu data dari server...</pre>
